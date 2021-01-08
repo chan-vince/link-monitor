@@ -10,4 +10,5 @@ func CheckSys() bool {
 		fmt.Println("Hello from Mac")
 	}
 	// todo make sure we're linux
+	return true
 }
