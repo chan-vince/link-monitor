@@ -91,3 +91,8 @@ func Configure(channel *amqp.Channel) error {
 	return nil
 }
 
+func (msgClient *MsgClient) Publish(routingKey string, message string) bool {
+	fmt.Printf("Publish key: %s", routingKey)
+	fmt.Printf("Publish msg: %s", message)
+	return true
+}
