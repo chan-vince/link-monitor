@@ -1,18 +1,17 @@
 package statByteVal
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
-	"encoding/json"
 )
 
 // Statistic Value 'object' (something from /sys/class/net/<IFACE>/statistics/something
 type statByteVal struct {
 	name            string
 	filePath        string
-	currentByteVal  uint64
+	totalBytes      uint64
 	pubIntervalSecs int
 }
 
@@ -34,21 +33,21 @@ func New(name string, filePath string) *statByteVal {
 	}
 
 	sv := statByteVal{name: name, filePath: filePath}
-	sv.currentByteVal = 0
-	sv.pubIntervalSecs = 2
+	sv.totalBytes = 0
+	sv.pubIntervalSecs = 1
 
 	return &sv
 }
 
 func (sv *statByteVal) ReadForever(client msgClient) uint64 {
 	for {
-		var value uint64
-		value = ReadFromFile(sv.filePath)
-		HandleReadValue(value)
+		var newReading uint64
+		newReading = ReadFromFile(sv.filePath)
+		sv.processNewReading(newReading)
 		time.Sleep(time.Duration(sv.pubIntervalSecs) * time.Second)
 		messageMap := &message{
 			Name:   sv.name,
-			Value: value,
+			Value: sv.totalBytes,
 		}
 		messageJson, _ := json.Marshal(messageMap)
 		client.Publish("routingKey", string(messageJson))
@@ -56,18 +55,15 @@ func (sv *statByteVal) ReadForever(client msgClient) uint64 {
 
 }
 
-func isFile(filePath string) (bool, string) {
-	info, err := os.Stat(filePath)
+func (sv *statByteVal) processNewReading(newReading uint64) {
+	fmt.Printf("newReading: %d\n", newReading)
+	fmt.Printf("totalBytes: %d\n", sv.totalBytes)
 
-	if os.IsNotExist(err) {
-		errStr := fmt.Sprintf("Does not exist: %s\n\n", filePath)
-		return false, errStr
+	// A restart, interface reload, counter zeroed or just wrapped around
+	if newReading < sv.totalBytes {
+		// Add the whole reading
+		sv.totalBytes += newReading
+	} else {
+		sv.totalBytes += newReading - sv.totalBytes
 	}
-
-	if info.IsDir() {
-		errStr := fmt.Sprintf("Not a valid file: %s\n\n", filePath)
-		return false, errStr
-	}
-
-	return true, ""
 }

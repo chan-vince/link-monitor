@@ -7,6 +7,22 @@ import (
 	"strconv"
 )
 
+func isFile(filePath string) (bool, string) {
+	info, err := os.Stat(filePath)
+
+	if os.IsNotExist(err) {
+		errStr := fmt.Sprintf("Does not exist: %s\n\n", filePath)
+		return false, errStr
+	}
+
+	if info.IsDir() {
+		errStr := fmt.Sprintf("Not a valid file: %s\n\n", filePath)
+		return false, errStr
+	}
+
+	return true, ""
+}
+
 func ReadFromFile(filePath string) uint64 {
 
 	fmt.Println(filePath)
@@ -42,9 +58,4 @@ func ReadFromFile(filePath string) uint64 {
 
 	fd.Close()
 	return final
-}
-
-func HandleReadValue(value uint64) int {
-	fmt.Printf("Value: %d\n", value)
-	return 0
 }

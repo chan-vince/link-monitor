@@ -1,7 +1,7 @@
 package main
 
 import (
-	"chanv/link-monitor/amqpClient"
+	"chanv/link-monitor/mq"
 	"chanv/link-monitor/statByteVal"
 	"chanv/link-monitor/cmd"
 	"fmt"
@@ -22,9 +22,9 @@ func main() {
 	filePath := arguments[1]
 	rx_bytes := statByteVal.New("rx_bytes", filePath)
 
-	connDetails := amqpClient.NewConnectionDetails("192.168.10.3", 5672, "test", "test")
-	msgClient := amqpClient.Connect(connDetails)
-	amqpClient.Configure(msgClient.Channel)
+	connDetails := mq.NewConnectionDetails("192.168.10.3", 5672, "test", "test")
+	msgClient := mq.Connect(connDetails)
+	mq.Configure(msgClient.Channel)
 
 	go rx_bytes.ReadForever(msgClient)
 
@@ -32,6 +32,6 @@ func main() {
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
 	//time for cleanup before exit
-	amqpClient.CloseAll()
+	mq.CloseAll()
 	fmt.Println("Adios!")
 }

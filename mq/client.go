@@ -1,4 +1,4 @@
-package amqpClient
+package mq
 
 import (
 	"fmt"
@@ -92,7 +92,7 @@ func Configure(channel *amqp.Channel) error {
 }
 
 func (msgClient *MsgClient) Publish(routingKey string, message string) bool {
-	fmt.Printf("Publish key: %s", routingKey)
-	fmt.Printf("Publish msg: %s", message)
+	fmt.Printf("Publish key: %s\n", routingKey)
+	fmt.Printf("Publish msg: %s\n", message)
 	return true
 }
