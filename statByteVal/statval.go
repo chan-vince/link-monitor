@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"encoding/json"
 )
 
 // Statistic Value 'object' (something from /sys/class/net/<IFACE>/statistics/something
@@ -13,6 +14,15 @@ type statByteVal struct {
 	filePath        string
 	currentByteVal  uint64
 	pubIntervalSecs int
+}
+
+type message struct {
+	Name   string
+	Value  uint64
+}
+
+type msgClient interface {
+	Publish(topic string, message string) bool
 }
 
 func New(name string, filePath string) *statByteVal {
@@ -25,18 +35,25 @@ func New(name string, filePath string) *statByteVal {
 
 	sv := statByteVal{name: name, filePath: filePath}
 	sv.currentByteVal = 0
-	sv.pubIntervalSecs = 0
+	sv.pubIntervalSecs = 2
 
 	return &sv
 }
 
-func (sv *statByteVal) ReadForever() uint64 {
+func (sv *statByteVal) ReadForever(client msgClient) uint64 {
 	for {
 		var value uint64
 		value = ReadFromFile(sv.filePath)
 		HandleReadValue(value)
-		time.Sleep(time.Second)
+		time.Sleep(time.Duration(sv.pubIntervalSecs) * time.Second)
+		messageMap := &message{
+			Name:   sv.name,
+			Value: value,
+		}
+		messageJson, _ := json.Marshal(messageMap)
+		client.Publish("routingKey", string(messageJson))
 	}
+
 }
 
 func isFile(filePath string) (bool, string) {

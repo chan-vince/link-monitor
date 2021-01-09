@@ -23,9 +23,10 @@ func main() {
 	rx_bytes := statByteVal.New("rx_bytes", filePath)
 
 	connDetails := amqpClient.NewConnectionDetails("192.168.10.3", 5672, "test", "test")
-	amqpClient.Connect(connDetails)
+	msgClient := amqpClient.Connect(connDetails)
+	amqpClient.Configure(msgClient.Channel)
 
-	go rx_bytes.ReadForever()
+	go rx_bytes.ReadForever(msgClient)
 
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)

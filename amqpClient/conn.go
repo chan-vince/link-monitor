@@ -6,11 +6,18 @@ import (
 	"github.com/streadway/amqp"
 )
 
+var connections []*amqp.Connection
+
 type ConnectionDetails struct {
 	hostname string
 	port     int
 	username string
 	password string
+}
+
+type MsgClient struct {
+	// Only support one channel per client for now
+	Channel *amqp.Channel
 }
 
 func NewConnectionDetails(hostname string, port int, username string, password string) *ConnectionDetails {
@@ -25,7 +32,10 @@ func NewConnectionDetails(hostname string, port int, username string, password s
 	return &connDetails
 }
 
-var connections []*amqp.Connection
+func NewMsgClient(channel *amqp.Channel) *MsgClient {
+	msgClient := MsgClient{Channel: channel}
+	return &msgClient
+}
 
 func CloseAll() int {
 	for _, conn := range connections {
@@ -41,7 +51,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func Connect(connDetails *ConnectionDetails) *amqp.Connection {
+func Connect(connDetails *ConnectionDetails) *MsgClient {
 	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
 		connDetails.username, connDetails.password,
 		connDetails.hostname, connDetails.port)
@@ -49,6 +59,40 @@ func Connect(connDetails *ConnectionDetails) *amqp.Connection {
 	conn, err := amqp.Dial(url)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	connections = append(connections, conn)
-	return conn
+
+	channel, err := conn.Channel()
+	failOnError(err, "Failed to get channel")
+
+	msgClient := NewMsgClient(channel)
+
+	return msgClient
 }
 
+func Configure(channel *amqp.Channel) error {
+	// The exchange is hardcoded to the amq.topic exchange
+
+	exchangeName := "amq.topic"
+	exchangeType := "topic"
+	queueName := "testq"
+	routingKey := "routingKey"
+
+	// Declare exchange
+	err := channel.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	failOnError(err, "Failed to declare exchange")
+
+	// Declare queueName
+	_, err = channel.QueueDeclare(queueName, true, true, false, false, nil)
+	failOnError(err, "Failed to declare queueName")
+
+	// Bind queue to exchange
+	err = channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
+	failOnError(err, "Failed to bind queue to exchange")
+
+	return nil
+}
+
+func (msgClient *MsgClient) Publish(routingKey string, message string) bool {
+	fmt.Printf("Publish key: %s", routingKey)
+	fmt.Printf("Publish msg: %s", message)
+	return true
+}
