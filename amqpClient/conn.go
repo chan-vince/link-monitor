@@ -59,6 +59,35 @@ func Connect(connDetails *ConnectionDetails) *MsgClient {
 	conn, err := amqp.Dial(url)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	connections = append(connections, conn)
-	return conn
+
+	channel, err := conn.Channel()
+	failOnError(err, "Failed to get channel")
+
+	msgClient := NewMsgClient(channel)
+
+	return msgClient
+}
+
+func Configure(channel *amqp.Channel) error {
+	// The exchange is hardcoded to the amq.topic exchange
+
+	exchangeName := "amq.topic"
+	exchangeType := "topic"
+	queueName := "testq"
+	routingKey := "routingKey"
+
+	// Declare exchange
+	err := channel.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	failOnError(err, "Failed to declare exchange")
+
+	// Declare queueName
+	_, err = channel.QueueDeclare(queueName, true, true, false, false, nil)
+	failOnError(err, "Failed to declare queueName")
+
+	// Bind queue to exchange
+	err = channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
+	failOnError(err, "Failed to bind queue to exchange")
+
+	return nil
 }
 
