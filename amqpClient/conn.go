@@ -6,11 +6,18 @@ import (
 	"github.com/streadway/amqp"
 )
 
+var connections []*amqp.Connection
+
 type ConnectionDetails struct {
 	hostname string
 	port     int
 	username string
 	password string
+}
+
+type MsgClient struct {
+	// Only support one channel per client for now
+	Channel *amqp.Channel
 }
 
 func NewConnectionDetails(hostname string, port int, username string, password string) *ConnectionDetails {
@@ -25,7 +32,10 @@ func NewConnectionDetails(hostname string, port int, username string, password s
 	return &connDetails
 }
 
-var connections []*amqp.Connection
+func NewMsgClient(channel *amqp.Channel) *MsgClient {
+	msgClient := MsgClient{Channel: channel}
+	return &msgClient
+}
 
 func CloseAll() int {
 	for _, conn := range connections {
@@ -41,7 +51,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func Connect(connDetails *ConnectionDetails) *amqp.Connection {
+func Connect(connDetails *ConnectionDetails) *MsgClient {
 	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
 		connDetails.username, connDetails.password,
 		connDetails.hostname, connDetails.port)
