@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 // global conf stores the config file from viper
@@ -28,26 +29,24 @@ func main() {
 
 	msgClient := rabbitmq.Client(connDetails)
 
-	rabbitmq.Configure(
-		msgClient,
-		conf.Broker.ExchangeName, conf.Broker.ExchangeType,
-		cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId),
-		)
-
-	var links []*cmd.Iface
+	msgClient.Configure(conf.Broker.ExchangeName, conf.Broker.ExchangeType)
 
 	for _, link := range conf.Links {
 		iface := cmd.NewIface(link)
-		links = append(links, iface)
 		go iface.Start()
 	}
 
-	go rabbitmq.StartPublishing(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId), conf.Broker.PublishInterval, links)
+	// Allow time for the first reading to happen before publishing
+	time.Sleep(time.Second)
+	go rabbitmq.StartPublishing(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId), conf.Broker.PublishInterval, cmd.GetIfaces())
 
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
+
 	//time for cleanup before exit
 	rabbitmq.CloseAll()
+
+	time.Sleep(time.Millisecond * 250)
 	fmt.Println("Adios!")
 }

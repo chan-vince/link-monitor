@@ -3,7 +3,6 @@ package rabbitmq
 import (
 	"chanv/link-monitor/cmd"
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -11,7 +10,7 @@ func StartPublishing(msgClient *client, routingKey string, publish_interval uint
 	for {
 		msg := getPublishMessage(links)
 
-		fmt.Println(msg)
+		//log.Println(msg)
 		msgClient.Publish(routingKey, msg)
 
 		time.Sleep(time.Duration(publish_interval) * time.Second)

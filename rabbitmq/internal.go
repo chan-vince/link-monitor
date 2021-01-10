@@ -10,9 +10,18 @@ import (
 var clients []*client
 
 type client struct {
-	conn  *Connection
-	channel *Channel
-	channels []*Channel
+	conn  *connection
+	channel *channel
+	channels []*channel
+}
+
+type connection struct {
+	*amqp.Connection
+}
+
+type channel struct {
+	*amqp.Channel
+	closed int32
 }
 
 func failOnError(err error, msg string) {
@@ -21,13 +30,13 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func dialConfig(url string, config amqp.Config) (*Connection, error) {
+func dialConfig(url string, config amqp.Config) (*connection, error) {
 	conn, err := amqp.DialConfig(url, config)
 	if err != nil {
 		return nil, err
 	}
 
-	connection := &Connection{
+	connection := &connection{
 		conn,
 	}
 
@@ -36,11 +45,11 @@ func dialConfig(url string, config amqp.Config) (*Connection, error) {
 			reason, ok := <-connection.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok {
-				log.Print("Auto reconnect cancelled")
+				log.Print("AMQP connection recovery cancelled")
 				break
 			}
-			log.Print("connection closed, reason: %v", reason)
-
+			log.Printf("Connection closed: %v", reason)
+			log.Print("Recovering connection...")
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for reconnect
@@ -49,11 +58,10 @@ func dialConfig(url string, config amqp.Config) (*Connection, error) {
 				conn, err := amqp.Dial(url)
 				if err == nil {
 					connection.Connection = conn
-					log.Print("reconnect success")
+					log.Print("Connection recovery success")
 					break
 				}
-
-				log.Print("reconnect failed, err: %v", err)
+				//log.Printf("Reconnect failed: %v", err)
 			}
 		}
 	}()
@@ -61,18 +69,13 @@ func dialConfig(url string, config amqp.Config) (*Connection, error) {
 	return connection, nil
 }
 
-// isClosed indicate closed by developer
-func (ch *Channel) isClosed() bool {
-	return atomic.LoadInt32(&ch.closed) == 1
-}
-
-func (c *Connection) channel() (*Channel, error) {
+func (c *connection) channel() (*channel, error) {
 	ch, err := c.Connection.Channel()
 	if err != nil {
 		return nil, err
 	}
 
-	channel := &Channel{
+	channel := &channel{
 		Channel: ch,
 	}
 
@@ -81,12 +84,12 @@ func (c *Connection) channel() (*Channel, error) {
 			reason, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok || channel.isClosed() {
-				log.Print("auto channel cancelled")
-				_ = channel.Close() // close again, ensure closed flag set when connection closed
+				log.Print("AMQP channel recovery cancelled")
+				_ = channel.close() // close again, ensure closed flag set when connection closed
 				break
 			}
-			log.Print("channel closed, reason: %v", reason)
-
+			log.Printf("Channel closed: %v", reason)
+			log.Print("Recovering channel...")
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for connection reconnect
@@ -94,16 +97,29 @@ func (c *Connection) channel() (*Channel, error) {
 
 				ch, err := c.Connection.Channel()
 				if err == nil {
-					log.Print("channel recreate success")
+					log.Print("Channel recovery success")
 					channel.Channel = ch
 					break
 				}
-
-				log.Print("channel recreate failed, err: %v", err)
+				//log.Printf("Channel recovery failed: %v", err)
 			}
 		}
 
 	}()
 
 	return channel, nil
+}
+
+func (ch *channel) close() error {
+	if ch.isClosed() {
+		return amqp.ErrClosed
+	}
+
+	atomic.StoreInt32(&ch.closed, 1)
+
+	return ch.Channel.Close()
+}
+
+func (ch *channel) isClosed() bool {
+	return atomic.LoadInt32(&ch.closed) == 1
 }

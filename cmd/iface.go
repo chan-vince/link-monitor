@@ -21,6 +21,8 @@ type Iface struct {
 	txBytes         stat
 }
 
+var ifaces []*Iface
+
 type stat struct {
 	name  string
 	value uint64
@@ -64,7 +66,13 @@ func NewIface(name string) *Iface {
 	//	sv.pubIntervalSecs = pubIntervalSecs
 	//}
 
+	ifaces = append(ifaces, &sv)
+
 	return &sv
+}
+
+func GetIfaces() []*Iface {
+	return ifaces
 }
 
 func (sv *Iface) Name() string {
