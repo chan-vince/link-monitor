@@ -68,7 +68,7 @@ func Connect(connDetails *ConnectionDetails) *MsgClient {
 	return msgClient
 }
 
-func Configure(channel *amqp.Channel) error {
+func Configure(channel *amqp.Channel) {
 	// The exchange is hardcoded to the amq.topic exchange
 
 	exchangeName := "amq.topic"
@@ -87,12 +87,20 @@ func Configure(channel *amqp.Channel) error {
 	// Bind queue to exchange
 	err = channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
 	failOnError(err, "Failed to bind queue to exchange")
-
-	return nil
 }
 
 func (msgClient *MsgClient) Publish(routingKey string, message string) bool {
-	fmt.Printf("Publish key: %s\n", routingKey)
-	fmt.Printf("Publish msg: %s\n", message)
+	fmt.Printf("publish key: %s\n", routingKey)
+	fmt.Printf("publish msg: %s\n", message)
+	exchangeName := "amq.topic"
+
+	publishing := amqp.Publishing{
+		ContentType: "text/plain",
+		Body:        []byte(message),
+	}
+
+	err := msgClient.Channel.Publish(exchangeName, routingKey, false, false, publishing)
+	failOnError(err, "Failed to publish a message")
+
 	return true
 }
