@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,15 +13,12 @@ import (
 )
 
 // Statistic Value 'object' (something from /sys/class/net/<IFACE>/statistics/something
-type iface struct {
+type Iface struct {
 	name            string
 	getStatFunc     getStat
 	// Only I/O bytes are supported for now
 	rxBytes         stat
 	txBytes         stat
-	client          msgClient
-	routingKey      string
-	pubIntervalSecs uint
 }
 
 type stat struct {
@@ -30,21 +26,16 @@ type stat struct {
 	value uint64
 }
 
-type message struct {
-	Link     string
-	RxBytes  uint64
-	TxBytes  uint64
-}
-
-type msgClient interface {
-	Publish(topic string, message string) bool
+type StatMessage struct {
+	RxBytes uint64 `json:"rx_bytes"`
+	TxBytes uint64 `json:"tx_bytes"`
 }
 
 type getStat func(stat string) uint64
 
-func NewIface(name string, pubIntervalSecs uint) *iface {
+func NewIface(name string) *Iface {
 
-	sv := iface{
+	sv := Iface{
 		name: name,
 		rxBytes: stat{
 			name: "rx_bytes",
@@ -66,63 +57,52 @@ func NewIface(name string, pubIntervalSecs uint) *iface {
 		log.Fatalf("Unsupported OS type: %s\n", runtime.GOOS)
 	}
 
-	// The client only needs a Publish method, see msgClient interface
-	sv.client = nil
-
-	// Minimum interval of 5 secs
-	if pubIntervalSecs < 5 {
-		sv.pubIntervalSecs = 5
-	} else {
-		sv.pubIntervalSecs = pubIntervalSecs
-	}
+	//// Minimum interval of 5 secs
+	//if pubIntervalSecs < 5 {
+	//	sv.pubIntervalSecs = 5
+	//} else {
+	//	sv.pubIntervalSecs = pubIntervalSecs
+	//}
 
 	return &sv
 }
 
-func (sv *iface) InitMsgClient(client msgClient, routingKey string) {
-	sv.client = client
-	sv.routingKey = routingKey
+func (sv *Iface) Name() string {
+	return sv.name
 }
 
-func (sv *iface) Start() {
-
-	if sv.client == nil{
-		panic("Message client not set - call .InitMsgClient() method first")
-	}
+func (sv *Iface) Start() {
 
 	// Populate the first readings
 	sv.readAll()
 
-	// Start all the go routines
+	// Start the go routine to read
 	go sv.ReadForever()
-	go sv.PublishForever()
 }
 
-func (sv *iface) ReadForever() {
+func (sv *Iface) ReadForever() {
 	for {
 		sv.readAll()
 		time.Sleep(time.Second)
 	}
 }
 
-func (sv *iface) PublishForever() {
-	for {
-		sv.publish()
-		time.Sleep(time.Duration(sv.pubIntervalSecs) * time.Second)
-	}
-}
+//func (sv *Iface) PublishForever() {
+//	for {
+//		sv.publish()
+//		time.Sleep(time.Duration(sv.pubIntervalSecs) * time.Second)
+//	}
+//}
 
-func (sv *iface) publish() {
-	messageMap := &message{
-		Link:   sv.name,
+func (sv *Iface) GetIfaceStatsMessage() StatMessage {
+	messageMap := &StatMessage{
 		RxBytes: sv.rxBytes.value,
 		TxBytes: sv.txBytes.value,
 	}
-	messageJson, _ := json.Marshal(messageMap)
-	sv.client.Publish(sv.routingKey, string(messageJson))
+	return *messageMap
 }
 
-func (sv *iface) readAll() {
+func (sv *Iface) readAll() {
 	sv.rxBytes.update(sv.getStatFunc(sv.rxBytes.name))
 	sv.txBytes.update(sv.getStatFunc(sv.txBytes.name))
 }
@@ -137,7 +117,7 @@ func (st *stat) update(newValue uint64) {
 	}
 }
 
-func (sv *iface) readFromFile(stat string) uint64 {
+func (sv *Iface) readFromFile(stat string) uint64 {
 	filePath := fmt.Sprintf("/sys/class/net/%s/statistics/%s", sv.name, stat)
 
 	result, errStr := isFile(filePath)
@@ -155,7 +135,7 @@ func (sv *iface) readFromFile(stat string) uint64 {
 	return processStringToUint64(data)
 }
 
-func (sv *iface) readFromNetstat(stat string) uint64 {
+func (sv *Iface) readFromNetstat(stat string) uint64 {
 
 	var nthAwk string
 
@@ -183,7 +163,7 @@ func processStringToUint64(input []byte) uint64 {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	return final
 }
 

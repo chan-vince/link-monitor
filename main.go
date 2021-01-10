@@ -18,7 +18,7 @@ func init() {
 
 	// Show config
 	s, _ := json.MarshalIndent(conf, "", "\t")
-	fmt.Printf("Using config:\n%s", string(s))
+	fmt.Printf("Using config:\n%s\n", string(s))
 }
 
 func main() {
@@ -36,12 +36,15 @@ func main() {
 
 	// Maybe a wait for connected?
 
-	for i, link := range conf.Links {
-		fmt.Println(i, link)
-		iface := cmd.NewIface(link, conf.Broker.PublishInterval)
-		iface.InitMsgClient(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId))
+	var links []*cmd.Iface
+
+	for _, link := range conf.Links {
+		iface := cmd.NewIface(link)
+		links = append(links, iface)
 		go iface.Start()
 	}
+
+	go msg.StartPublishing(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId), conf.Broker.PublishInterval, links)
 
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)

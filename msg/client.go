@@ -38,7 +38,13 @@ func NewConnection(connDetails *connectionDetails) *connection {
 		connDetails.username, connDetails.password,
 		connDetails.hostname, connDetails.port)
 
-	conn, err := amqp.Dial(url)
+	properties := amqp.Table{"user-id": "link-monitor"}
+
+	config := amqp.Config{
+		nil, "/", 1, 0, 10, nil,
+		properties, "en_US", nil}
+
+	conn, err := amqp.DialConfig(url, config)
 	failOnError(err, "Failed to connect to RabbitMQ")
 
 	channel, err := conn.Channel()
@@ -95,7 +101,7 @@ func (connection *connection) Publish(routingKey string, message string) bool {
 	exchangeName := "amq.topic"
 
 	publishing := amqp.Publishing{
-		ContentType: "text/plain",
+		ContentType: "application/json",
 		Body:        []byte(message),
 	}
 
