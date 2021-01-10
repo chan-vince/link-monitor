@@ -23,17 +23,23 @@ func init() {
 
 func main() {
 	connDetails := msg.NewConnectionDetails(
-		"192.168.10.3", 5672,
-		"test", "test")
-	msgClient := msg.Connect(connDetails)
-	msg.Configure(msgClient.Channel)
+		conf.Broker.Host, conf.Broker.Port,
+		conf.Broker.Username, conf.Broker.Password)
+
+	msgClient := msg.NewConnection(connDetails)
+
+	msg.ConfigureBroker(
+		msgClient,
+		conf.Broker.ExchangeName, conf.Broker.ExchangeType,
+		cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId),
+		)
 
 	// Maybe a wait for connected?
 
 	for i, link := range conf.Links {
 		fmt.Println(i, link)
 		iface := cmd.NewIface(link, conf.Broker.PublishInterval)
-		iface.RegisterMsgClient(msgClient)
+		iface.InitMsgClient(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId))
 		go iface.Start()
 	}
 

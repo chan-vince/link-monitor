@@ -17,15 +17,23 @@ import (
 type iface struct {
 	name            string
 	getStatFunc     getStat
-	rxBytes         uint64
-	txBytes         uint64
+	// Only I/O bytes are supported for now
+	rxBytes         stat
+	txBytes         stat
 	client          msgClient
+	routingKey      string
 	pubIntervalSecs uint
 }
 
+type stat struct {
+	name  string
+	value uint64
+}
+
 type message struct {
-	Name   string
-	Value  uint64
+	Link     string
+	RxBytes  uint64
+	TxBytes  uint64
 }
 
 type msgClient interface {
@@ -36,7 +44,17 @@ type getStat func(stat string) uint64
 
 func NewIface(name string, pubIntervalSecs uint) *iface {
 
-	sv := iface{name: name}
+	sv := iface{
+		name: name,
+		rxBytes: stat{
+			name: "rx_bytes",
+			value: 0,
+		},
+		txBytes: stat{
+			name: "tx_bytes",
+			value: 0,
+		},
+	}
 
 	// On Linux we can read straight out of /sys/class/net but on Mac we
 	// have to use netstat exec hackery. Windows...no thanks
@@ -47,10 +65,6 @@ func NewIface(name string, pubIntervalSecs uint) *iface {
 	} else {
 		log.Fatalf("Unsupported OS type: %s\n", runtime.GOOS)
 	}
-
-	// Only I/O bytes are supported for now
-	sv.rxBytes = 0
-	sv.txBytes = 0
 
 	// The client only needs a Publish method, see msgClient interface
 	sv.client = nil
@@ -65,19 +79,19 @@ func NewIface(name string, pubIntervalSecs uint) *iface {
 	return &sv
 }
 
-func (sv *iface) RegisterMsgClient(client msgClient) {
+func (sv *iface) InitMsgClient(client msgClient, routingKey string) {
 	sv.client = client
+	sv.routingKey = routingKey
 }
 
 func (sv *iface) Start() {
 
 	if sv.client == nil{
-		panic("Message client not set - call .RegisterMsgClient() method first")
+		panic("Message client not set - call .InitMsgClient() method first")
 	}
 
-	// Do the first reading
-	reading :=sv.read()
-	sv.process(reading)
+	// Populate the first readings
+	sv.readAll()
 
 	// Start all the go routines
 	go sv.ReadForever()
@@ -86,8 +100,7 @@ func (sv *iface) Start() {
 
 func (sv *iface) ReadForever() {
 	for {
-		reading :=sv.read()
-		sv.process(reading)
+		sv.readAll()
 		time.Sleep(time.Second)
 	}
 }
@@ -101,33 +114,32 @@ func (sv *iface) PublishForever() {
 
 func (sv *iface) publish() {
 	messageMap := &message{
-		Name:   sv.name,
-		Value: sv.rxBytes,
+		Link:   sv.name,
+		RxBytes: sv.rxBytes.value,
+		TxBytes: sv.txBytes.value,
 	}
 	messageJson, _ := json.Marshal(messageMap)
-	sv.client.Publish("routingKey", string(messageJson))
+	sv.client.Publish(sv.routingKey, string(messageJson))
 }
 
-func (sv *iface) read() uint64 {
-	return sv.getStatFunc("rx_bytes")
+func (sv *iface) readAll() {
+	sv.rxBytes.update(sv.getStatFunc(sv.rxBytes.name))
+	sv.txBytes.update(sv.getStatFunc(sv.txBytes.name))
 }
 
-func (sv *iface) process(newReading uint64) {
+func (st *stat) update(newValue uint64) {
 	// A restart, interface reload, counter zeroed or just wrapped around
-	if newReading < sv.rxBytes {
+	if newValue < st.value {
 		// Add the whole reading
-		sv.rxBytes += newReading
+		st.value += newValue
 	} else {
-		sv.rxBytes += newReading - sv.rxBytes
+		st.value += newValue - st.value
 	}
-
-	fmt.Printf("newReading: %d\n", newReading)
-	fmt.Printf("totalBytes: %d\n", sv.rxBytes)
 }
 
 func (sv *iface) readFromFile(stat string) uint64 {
 	filePath := fmt.Sprintf("/sys/class/net/%s/statistics/%s", sv.name, stat)
-	fmt.Println(filePath)
+
 	result, errStr := isFile(filePath)
 	if result == false {
 		log.Printf("Invalid filePath for %s\n", sv.name)
@@ -139,13 +151,6 @@ func (sv *iface) readFromFile(stat string) uint64 {
 	if err != nil {
 		panic(err)
 	}
-	value := strings.TrimSuffix(string(data), "\n")
-	final, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(final)
 
 	return processStringToUint64(data)
 }
@@ -154,6 +159,7 @@ func (sv *iface) readFromNetstat(stat string) uint64 {
 
 	var nthAwk string
 
+	// Disgusting
 	if stat == "rx_bytes" {
 		nthAwk = "$7"
 	} else if stat == "tx_bytes" {
@@ -167,6 +173,7 @@ func (sv *iface) readFromNetstat(stat string) uint64 {
 	if err != nil {
 		fmt.Printf("Failed to execute command: %s", cmd)
 	}
+
 	return processStringToUint64(out)
 }
 
@@ -176,6 +183,7 @@ func processStringToUint64(input []byte) uint64 {
 	if err != nil {
 		log.Fatal(err)
 	}
+	
 	return final
 }
 

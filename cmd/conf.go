@@ -20,6 +20,10 @@ type Config struct {
 	Broker   struct {
 		Host            string `mapstructure:"host"`
 		Port            int    `mapstructure:"port"`
+		Username        string `mapstructure:"username"`
+		Password        string `mapstructure:"password"`
+		ExchangeName    string `mapstructure:"exchange_name"`
+		ExchangeType    string `mapstructure:"exchange_type"`
 		RoutingKey      string `mapstructure:"routing_key"`
 		PublishInterval uint    `mapstructure:"publish_interval"`
 	}

@@ -6,7 +6,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-var connections []*amqp.Connection
+var connections []*connection
 
 type connectionDetails struct {
 	hostname string
@@ -27,19 +27,39 @@ func NewConnectionDetails(hostname string, port int, username string, password s
 	return &connDetails
 }
 
-type msgClient struct {
-	// Only support one channel per client for now
-	Channel *amqp.Channel
+type connection struct {
+	conn *amqp.Connection
+	channel *amqp.Channel
+	channels []*amqp.Channel
 }
 
-func NewMsgClient(channel *amqp.Channel) *msgClient {
-	msgClient := msgClient{Channel: channel}
-	return &msgClient
+func NewConnection(connDetails *connectionDetails) *connection {
+	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
+		connDetails.username, connDetails.password,
+		connDetails.hostname, connDetails.port)
+
+	conn, err := amqp.Dial(url)
+	failOnError(err, "Failed to connect to RabbitMQ")
+
+	channel, err := conn.Channel()
+	failOnError(err, "Failed to get channel")
+
+	connection := connection{
+		conn: conn,
+		channel: channel,
+		channels: []*amqp.Channel{channel},
+	}
+
+	connections = append(connections, &connection)
+
+	return &connection
 }
 
 func CloseAll() int {
 	for _, conn := range connections {
-		err := conn.Close()
+		err := conn.channel.Close()
+		failOnError(err, "Failed to close channel")
+		err = conn.conn.Close()
 		failOnError(err, "Failed to close connection")
 	}
 	return 0
@@ -51,45 +71,25 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func Connect(connDetails *connectionDetails) *msgClient {
-	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
-		connDetails.username, connDetails.password,
-		connDetails.hostname, connDetails.port)
-
-	conn, err := amqp.Dial(url)
-	failOnError(err, "Failed to connect to RabbitMQ")
-	connections = append(connections, conn)
-
-	channel, err := conn.Channel()
-	failOnError(err, "Failed to get channel")
-
-	msgClient := NewMsgClient(channel)
-
-	return msgClient
-}
-
-func Configure(channel *amqp.Channel) {
+func ConfigureBroker(connection *connection, exchangeName, exchangeType, routingKey string) {
 	// The exchange is hardcoded to the amq.topic exchange
 
-	exchangeName := "amq.topic"
-	exchangeType := "topic"
 	queueName := "testq"
-	routingKey := "routingKey"
 
 	// Declare exchange
-	err := channel.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
+	err := connection.channel.ExchangeDeclare(exchangeName, exchangeType, true, false, false, false, nil)
 	failOnError(err, "Failed to declare exchange")
 
 	// Declare queueName
-	_, err = channel.QueueDeclare(queueName, true, true, false, false, nil)
+	_, err = connection.channel.QueueDeclare(queueName, true, true, false, false, nil)
 	failOnError(err, "Failed to declare queueName")
 
 	// Bind queue to exchange
-	err = channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
+	err = connection.channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
 	failOnError(err, "Failed to bind queue to exchange")
 }
 
-func (msgClient *msgClient) Publish(routingKey string, message string) bool {
+func (connection *connection) Publish(routingKey string, message string) bool {
 	fmt.Printf("publish key: %s\n", routingKey)
 	fmt.Printf("publish msg: %s\n", message)
 	exchangeName := "amq.topic"
@@ -99,7 +99,7 @@ func (msgClient *msgClient) Publish(routingKey string, message string) bool {
 		Body:        []byte(message),
 	}
 
-	err := msgClient.Channel.Publish(exchangeName, routingKey, false, false, publishing)
+	err := connection.channel.Publish(exchangeName, routingKey, false, false, publishing)
 	failOnError(err, "Failed to publish a message")
 
 	return true
