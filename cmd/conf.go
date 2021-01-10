@@ -21,7 +21,7 @@ type Config struct {
 		Host            string `mapstructure:"host"`
 		Port            int    `mapstructure:"port"`
 		RoutingKey      string `mapstructure:"routing_key"`
-		PublishInterval int    `mapstructure:"publish_interval"`
+		PublishInterval uint    `mapstructure:"publish_interval"`
 	}
 }
 

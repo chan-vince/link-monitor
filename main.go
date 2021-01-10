@@ -2,8 +2,8 @@ package main
 
 import (
 	"chanv/link-monitor/cmd"
-	"chanv/link-monitor/mq"
-	"chanv/link-monitor/statByteVal"
+	"chanv/link-monitor/msg"
+	"chanv/link-monitor/netIface"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,11 +29,13 @@ func main() {
 	//	os.Exit(1)
 	//}
 	iface := conf.Links[0]
-	rx_bytes := statByteVal.New(iface)
+	rx_bytes := netIface.New(iface, conf.Broker.PublishInterval)
 
-	connDetails := mq.NewConnectionDetails("192.168.10.3", 5672, "test", "test")
-	msgClient := mq.Connect(connDetails)
-	mq.Configure(msgClient.Channel)
+	connDetails := msg.NewConnectionDetails(
+		"192.168.10.3", 5672,
+		"test", "test")
+	msgClient := msg.Connect(connDetails)
+	msg.Configure(msgClient.Channel)
 
 	rx_bytes.RegisterMsgClient(msgClient)
 	go rx_bytes.Start()
@@ -42,6 +44,6 @@ func main() {
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
 	//time for cleanup before exit
-	mq.CloseAll()
+	msg.CloseAll()
 	fmt.Println("Adios!")
 }

@@ -1,4 +1,4 @@
-package mq
+package msg
 
 import (
 	"fmt"
@@ -8,20 +8,15 @@ import (
 
 var connections []*amqp.Connection
 
-type ConnectionDetails struct {
+type connectionDetails struct {
 	hostname string
 	port     int
 	username string
 	password string
 }
 
-type MsgClient struct {
-	// Only support one channel per client for now
-	Channel *amqp.Channel
-}
-
-func NewConnectionDetails(hostname string, port int, username string, password string) *ConnectionDetails {
-	connDetails := ConnectionDetails{
+func NewConnectionDetails(hostname string, port int, username string, password string) *connectionDetails {
+	connDetails := connectionDetails{
 		hostname: hostname,
 		port:     port,
 		username: username,
@@ -32,8 +27,13 @@ func NewConnectionDetails(hostname string, port int, username string, password s
 	return &connDetails
 }
 
-func NewMsgClient(channel *amqp.Channel) *MsgClient {
-	msgClient := MsgClient{Channel: channel}
+type msgClient struct {
+	// Only support one channel per client for now
+	Channel *amqp.Channel
+}
+
+func NewMsgClient(channel *amqp.Channel) *msgClient {
+	msgClient := msgClient{Channel: channel}
 	return &msgClient
 }
 
@@ -51,7 +51,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func Connect(connDetails *ConnectionDetails) *MsgClient {
+func Connect(connDetails *connectionDetails) *msgClient {
 	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
 		connDetails.username, connDetails.password,
 		connDetails.hostname, connDetails.port)
@@ -89,7 +89,7 @@ func Configure(channel *amqp.Channel) {
 	failOnError(err, "Failed to bind queue to exchange")
 }
 
-func (msgClient *MsgClient) Publish(routingKey string, message string) bool {
+func (msgClient *msgClient) Publish(routingKey string, message string) bool {
 	fmt.Printf("publish key: %s\n", routingKey)
 	fmt.Printf("publish msg: %s\n", message)
 	exchangeName := "amq.topic"
