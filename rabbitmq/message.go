@@ -1,4 +1,4 @@
-package msg
+package rabbitmq
 
 import (
 	"chanv/link-monitor/cmd"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func StartPublishing(msgClient connection, routingKey string, publish_interval uint, links []*cmd.Iface){
+func StartPublishing(msgClient *client, routingKey string, publish_interval uint, links []*cmd.Iface){
 	for {
 		msg := getPublishMessage(links)
 

@@ -2,7 +2,7 @@ package main
 
 import (
 	"chanv/link-monitor/cmd"
-	"chanv/link-monitor/msg"
+	"chanv/link-monitor/rabbitmq"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,19 +22,17 @@ func init() {
 }
 
 func main() {
-	connDetails := msg.NewConnectionDetails(
+	connDetails := rabbitmq.ConnectionDetails(
 		conf.Broker.Host, conf.Broker.Port,
 		conf.Broker.Username, conf.Broker.Password)
 
-	msgClient := msg.NewConnection(connDetails)
+	msgClient := rabbitmq.Client(connDetails)
 
-	msg.ConfigureBroker(
+	rabbitmq.Configure(
 		msgClient,
 		conf.Broker.ExchangeName, conf.Broker.ExchangeType,
 		cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId),
 		)
-
-	// Maybe a wait for connected?
 
 	var links []*cmd.Iface
 
@@ -44,12 +42,12 @@ func main() {
 		go iface.Start()
 	}
 
-	go msg.StartPublishing(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId), conf.Broker.PublishInterval, links)
+	go rabbitmq.StartPublishing(msgClient, cmd.ConstructRoutingKey(conf.Broker.RoutingKey, conf.KitId), conf.Broker.PublishInterval, links)
 
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
 	//time for cleanup before exit
-	msg.CloseAll()
+	rabbitmq.CloseAll()
 	fmt.Println("Adios!")
 }
