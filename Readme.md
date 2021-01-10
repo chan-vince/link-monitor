@@ -15,3 +15,4 @@ Linux:
 - persist counters in cache dir
 - all the devops
 - expand message struct to support a full stat output per net interface
+- proper cleanup - close channels first

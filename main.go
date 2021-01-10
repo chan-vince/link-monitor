@@ -3,7 +3,6 @@ package main
 import (
 	"chanv/link-monitor/cmd"
 	"chanv/link-monitor/msg"
-	"chanv/link-monitor/netIface"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,22 +22,20 @@ func init() {
 }
 
 func main() {
-	//arguments := os.Args
-	//if len(arguments) == 1 {
-	//	fmt.Println("Please provide an argument!")
-	//	os.Exit(1)
-	//}
-	iface := conf.Links[0]
-	rx_bytes := netIface.New(iface, conf.Broker.PublishInterval)
-
 	connDetails := msg.NewConnectionDetails(
 		"192.168.10.3", 5672,
 		"test", "test")
 	msgClient := msg.Connect(connDetails)
 	msg.Configure(msgClient.Channel)
 
-	rx_bytes.RegisterMsgClient(msgClient)
-	go rx_bytes.Start()
+	// Maybe a wait for connected?
+
+	for i, link := range conf.Links {
+		fmt.Println(i, link)
+		iface := cmd.NewIface(link, conf.Broker.PublishInterval)
+		iface.RegisterMsgClient(msgClient)
+		go iface.Start()
+	}
 
 	quitChannel := make(chan os.Signal, 1)
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)

@@ -1,4 +1,4 @@
-package netIface
+package cmd
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 )
 
 // Statistic Value 'object' (something from /sys/class/net/<IFACE>/statistics/something
-type netIface struct {
+type iface struct {
 	name            string
 	getStatFunc     getStat
 	rxBytes         uint64
@@ -32,24 +32,32 @@ type msgClient interface {
 	Publish(topic string, message string) bool
 }
 
-type getStat func(iface string, stat string) uint64
+type getStat func(stat string) uint64
 
-func New(iface string, pubIntervalSecs uint) *netIface {
+func NewIface(name string, pubIntervalSecs uint) *iface {
 
-	sv := netIface{name: iface}
+	sv := iface{name: name}
 
+	// On Linux we can read straight out of /sys/class/net but on Mac we
+	// have to use netstat exec hackery. Windows...no thanks
 	if runtime.GOOS == "linux"{
 		sv.getStatFunc = sv.readFromFile
 	} else if runtime.GOOS == "darwin" {
 		sv.getStatFunc = sv.readFromNetstat
+	} else {
+		log.Fatalf("Unsupported OS type: %s\n", runtime.GOOS)
 	}
 
+	// Only I/O bytes are supported for now
 	sv.rxBytes = 0
 	sv.txBytes = 0
+
+	// The client only needs a Publish method, see msgClient interface
 	sv.client = nil
 
-	if pubIntervalSecs < 1 {
-		sv.pubIntervalSecs = 1
+	// Minimum interval of 5 secs
+	if pubIntervalSecs < 5 {
+		sv.pubIntervalSecs = 5
 	} else {
 		sv.pubIntervalSecs = pubIntervalSecs
 	}
@@ -57,14 +65,14 @@ func New(iface string, pubIntervalSecs uint) *netIface {
 	return &sv
 }
 
-func (sv *netIface) RegisterMsgClient(client msgClient) {
+func (sv *iface) RegisterMsgClient(client msgClient) {
 	sv.client = client
 }
 
-func (sv *netIface) Start() {
+func (sv *iface) Start() {
 
 	if sv.client == nil{
-		panic("Message client not set")
+		panic("Message client not set - call .RegisterMsgClient() method first")
 	}
 
 	// Do the first reading
@@ -76,7 +84,7 @@ func (sv *netIface) Start() {
 	go sv.PublishForever()
 }
 
-func (sv *netIface) ReadForever() {
+func (sv *iface) ReadForever() {
 	for {
 		reading :=sv.read()
 		sv.process(reading)
@@ -84,14 +92,14 @@ func (sv *netIface) ReadForever() {
 	}
 }
 
-func (sv *netIface) PublishForever() {
+func (sv *iface) PublishForever() {
 	for {
 		sv.publish()
 		time.Sleep(time.Duration(sv.pubIntervalSecs) * time.Second)
 	}
 }
 
-func (sv *netIface) publish() {
+func (sv *iface) publish() {
 	messageMap := &message{
 		Name:   sv.name,
 		Value: sv.rxBytes,
@@ -100,11 +108,11 @@ func (sv *netIface) publish() {
 	sv.client.Publish("routingKey", string(messageJson))
 }
 
-func (sv *netIface) read() uint64 {
-	return sv.getStatFunc(sv.name, "rx_bytes")
+func (sv *iface) read() uint64 {
+	return sv.getStatFunc("rx_bytes")
 }
 
-func (sv *netIface) process(newReading uint64) {
+func (sv *iface) process(newReading uint64) {
 	// A restart, interface reload, counter zeroed or just wrapped around
 	if newReading < sv.rxBytes {
 		// Add the whole reading
@@ -117,12 +125,12 @@ func (sv *netIface) process(newReading uint64) {
 	fmt.Printf("totalBytes: %d\n", sv.rxBytes)
 }
 
-func (sv *netIface) readFromFile(iface string, stat string) uint64 {
-	filePath := fmt.Sprintf("/sys/class/net/%s/statistics/%s", iface, stat)
+func (sv *iface) readFromFile(stat string) uint64 {
+	filePath := fmt.Sprintf("/sys/class/net/%s/statistics/%s", sv.name, stat)
 	fmt.Println(filePath)
 	result, errStr := isFile(filePath)
 	if result == false {
-		log.Printf("Invalid filePath for %s\n", iface)
+		log.Printf("Invalid filePath for %s\n", sv.name)
 		panic(errStr)
 	}
 
@@ -142,7 +150,7 @@ func (sv *netIface) readFromFile(iface string, stat string) uint64 {
 	return processStringToUint64(data)
 }
 
-func (sv *netIface) readFromNetstat(iface string, stat string) uint64 {
+func (sv *iface) readFromNetstat(stat string) uint64 {
 
 	var nthAwk string
 
@@ -154,13 +162,11 @@ func (sv *netIface) readFromNetstat(iface string, stat string) uint64 {
 		panic("unsupported stat")
 	}
 
-	cmd := fmt.Sprintf("netstat -I %s -nbf inet | tail -n 1 | awk '{print %s}'", iface, nthAwk)
+	cmd := fmt.Sprintf("netstat -I %s -nbf inet | tail -n 1 | awk '{print %s}'", sv.name, nthAwk)
 	out, err := exec.Command("bash","-c",cmd).Output()
 	if err != nil {
 		fmt.Printf("Failed to execute command: %s", cmd)
 	}
-	fmt.Println(processStringToUint64(out))
-
 	return processStringToUint64(out)
 }
 
