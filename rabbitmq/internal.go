@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"chanv/link-monitor/syslog"
 	"github.com/streadway/amqp"
 	"log"
 	"sync/atomic"
@@ -45,7 +46,7 @@ func dialConfig(url string, config amqp.Config) (*connection, error) {
 			reason, ok := <-connection.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok {
-				log.Print("AMQP connection recovery cancelled")
+				syslog.Log().Info("AMQP connection recovery cancelled")
 				break
 			}
 			log.Printf("Connection closed: %v", reason)
@@ -84,7 +85,7 @@ func (c *connection) channel() (*channel, error) {
 			reason, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok || channel.isClosed() {
-				log.Print("AMQP channel recovery cancelled")
+				syslog.Log().Info("AMQP channel recovery cancelled")
 				_ = channel.close() // close again, ensure closed flag set when connection closed
 				break
 			}

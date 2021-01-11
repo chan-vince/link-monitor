@@ -1,9 +1,9 @@
 package rabbitmq
 
 import (
+	"chanv/link-monitor/syslog"
 	"fmt"
 	"github.com/streadway/amqp"
-	"log"
 	"time"
 )
 
@@ -21,14 +21,14 @@ func Client(connDetails *connectionDetails) *client {
 	var conn *connection
 	var err error
 
-	log.Print("Connecting to broker...")
+	syslog.Log().Info("Connecting to broker...")
 	// If the broker isn't available when the application starts...we try with infinite persistence
 	for {
 		conn, err = dialConfig(url, config)
 		if err != nil{
 			time.Sleep(5 * time.Second)
 		} else {
-			log.Print("Connected!")
+			syslog.Log().Info("Connected!")
 			break
 		}
 	}
@@ -68,9 +68,9 @@ func (client *client) Publish(routingKey string, message string) bool {
 		if err != nil {
 			//log.Print("Failed to publish a message\n", err)
 		} else {
-			log.Print("Published:")
-			log.Printf("\tkey: %s\n", routingKey)
-			log.Printf("\tmsg: %s\n", message)
+			syslog.Log().Debug("Published:")
+			syslog.Log().Debug(fmt.Sprintf("\tkey: %s\n", routingKey))
+			syslog.Log().Debug(fmt.Sprintf("\tmsg: %s\n", message))
 		}
 	}
 
