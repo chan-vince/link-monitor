@@ -3,10 +3,9 @@ package main
 import (
 	"chanv/link-monitor/cmd"
 	"chanv/link-monitor/rabbitmq"
-	"chanv/link-monitor/syslog"
 	"encoding/json"
 	"fmt"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,23 +18,22 @@ var conf *cmd.Config
 func init() {
 	conf = cmd.GetConf()
 
-	if err := syslog.InitLogger(conf.Logging.Level); err != nil {
-		fmt.Printf("Error: %+v\n", err)
-		os.Exit(-1)
+	log.SetOutput(os.Stdout)
+	ll, err := log.ParseLevel(conf.Logging.Level)
+	if err != nil {
+		ll = log.ErrorLevel
 	}
+	log.SetLevel(ll)
 
 	// Show config
 	s, _ := json.MarshalIndent(conf, "", "\t")
-	fmt.Printf("Using config:\n%s\n", string(s))
+	log.Debugf("Using config:\n%s\n", string(s))
 }
 
 func main() {
-	log.Printf("Log level: %s\n", syslog.ZapcoreLevel)
-	logger := syslog.GetLogger()
-	defer logger.Sync()
-	log.Println("Logging to syslog.")
+	log.Printf("Log level: %s\n", log.GetLevel())
 
-	logger.Error("Using config:")
+	log.Print("Using config:")
 
 	connDetails := rabbitmq.ConnectionDetails(
 		conf.Broker.Host, conf.Broker.Port,
