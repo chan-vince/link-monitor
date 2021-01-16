@@ -4,7 +4,6 @@ import (
 	"chanv/link-monitor/cmd"
 	"chanv/link-monitor/rabbitmq"
 	"encoding/json"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
@@ -19,11 +18,11 @@ func init() {
 	conf = cmd.GetConf()
 
 	log.SetOutput(os.Stdout)
-	ll, err := log.ParseLevel(conf.Logging.Level)
+	level, err := log.ParseLevel(conf.Logging.Level)
 	if err != nil {
-		ll = log.ErrorLevel
+		level = log.ErrorLevel
 	}
-	log.SetLevel(ll)
+	log.SetLevel(level)
 
 	// Show config
 	s, _ := json.MarshalIndent(conf, "", "\t")
@@ -32,8 +31,6 @@ func init() {
 
 func main() {
 	log.Printf("Log level: %s\n", log.GetLevel())
-
-	log.Print("Using config:")
 
 	connDetails := rabbitmq.ConnectionDetails(
 		conf.Broker.Host, conf.Broker.Port,
@@ -60,5 +57,5 @@ func main() {
 	rabbitmq.CloseAll()
 
 	time.Sleep(time.Millisecond * 250)
-	fmt.Println("Adios!")
+	log.Println("Adios!")
 }

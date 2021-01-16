@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -37,13 +37,13 @@ func GetConf() *Config {
 	err := viper.ReadInConfig()
 
 	if err != nil {
-		fmt.Printf("%v", err)
+		log.Errorf("%v", err)
 	}
 
 	conf := &Config{}
 	err = viper.Unmarshal(conf)
 	if err != nil {
-		fmt.Printf("unable to decode into config struct, %v", err)
+		log.Fatalf("unable to decode into config struct, %v", err)
 	}
 
 	return conf

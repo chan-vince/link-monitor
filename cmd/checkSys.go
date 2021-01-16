@@ -1,21 +1,21 @@
 package cmd
 
 import (
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"runtime"
 )
 
 func CheckSys() string {
 	if runtime.GOOS == "darwin" {
-		fmt.Println("Hello from Mac")
+		log.Debug("OS: Mac")
 	} else if runtime.GOOS == "linux" {
-		fmt.Println("Hello from Linux")
+		log.Debug("OS: Linux")
 	} else if runtime.GOOS == "windows" {
-		fmt.Println("Windows not supported, exiting")
+		log.Error("Windows is not supported, exiting")
 		os.Exit(1)
 	} else {
-		fmt.Println("Unknown OS, exiting")
+		log.Error("Unknown OS, exiting")
 		os.Exit(1)
 	}
 	return runtime.GOOS
