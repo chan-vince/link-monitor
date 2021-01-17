@@ -32,6 +32,8 @@ func init() {
 func main() {
 	log.Printf("Log level: %s\n", log.GetLevel())
 
+	_ = cmd.PathCreate(conf.CacheDir)
+
 	connDetails := rabbitmq.ConnectionDetails(
 		conf.Broker.Host, conf.Broker.Port,
 		conf.Broker.Username, conf.Broker.Password)
@@ -57,5 +59,6 @@ func main() {
 	rabbitmq.CloseAll()
 
 	time.Sleep(time.Millisecond * 250)
+	cmd.Save(rabbitmq.GetPublishMessage(cmd.GetIfaces()), conf.CacheDir, "save.json")
 	log.Println("Adios!")
 }

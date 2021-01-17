@@ -43,13 +43,14 @@ func dialConfig(url string, config amqp.Config) (*connection, error) {
 	go func() {
 		for {
 			reason, ok := <-connection.NotifyClose(make(chan *amqp.Error))
-			// exit this goroutine if closed by developer
+			// exit this goroutine if closed by system interrupt/ctrl-c
 			if !ok {
-				log.Info("AMQP connection recovery cancelled")
+				log.Debug("AMQP connection recovery cancelled")
+				log.Info("Closing AMQP connection")
 				break
 			}
-			log.Printf("Connection closed: %v", reason)
-			log.Print("Recovering connection...")
+			log.Debugf("Connection closed: %v", reason)
+			log.Debug("Recovering connection...")
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for reconnect
@@ -58,7 +59,7 @@ func dialConfig(url string, config amqp.Config) (*connection, error) {
 				conn, err := amqp.Dial(url)
 				if err == nil {
 					connection.Connection = conn
-					log.Print("Connection recovery success")
+					log.Debug("Connection recovery success")
 					break
 				}
 				//log.Printf("Reconnect failed: %v", err)
@@ -82,14 +83,14 @@ func (c *connection) channel() (*channel, error) {
 	go func() {
 		for {
 			reason, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
-			// exit this goroutine if closed by developer
+			// exit this goroutine if closed by system interrupt/ctrl-c
 			if !ok || channel.isClosed() {
-				log.Info("AMQP channel recovery cancelled")
+				log.Debug("AMQP channel recovery cancelled")
 				_ = channel.close() // close again, ensure closed flag set when connection closed
 				break
 			}
-			log.Printf("Channel closed: %v", reason)
-			log.Print("Recovering channel...")
+			log.Debugf("Channel closed: %v", reason)
+			log.Debug("Recovering channel...")
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for connection reconnect
@@ -97,7 +98,7 @@ func (c *connection) channel() (*channel, error) {
 
 				ch, err := c.Connection.Channel()
 				if err == nil {
-					log.Print("Channel recovery success")
+					log.Debug("Channel recovery success")
 					channel.Channel = ch
 					break
 				}

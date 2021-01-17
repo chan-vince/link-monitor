@@ -8,7 +8,7 @@ import (
 
 func StartPublishing(msgClient *client, routingKey string, publish_interval uint, links []*cmd.Iface){
 	for {
-		msg := getPublishMessage(links)
+		msg := GetPublishMessage(links)
 
 		//log.Println(msg)
 		msgClient.Publish(routingKey, msg)
@@ -17,7 +17,7 @@ func StartPublishing(msgClient *client, routingKey string, publish_interval uint
 	}
 }
 
-func getPublishMessage(links []*cmd.Iface) string {
+func GetPublishMessage(links []*cmd.Iface) string {
 	message := map[string] cmd.StatMessage {}
 
 	for _, link := range links {
